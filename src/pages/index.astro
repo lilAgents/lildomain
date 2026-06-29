@@ -94,6 +94,17 @@ const description =
               <label class="tld-chip"><input type="checkbox" value=".xyz" /> .xyz</label>
             </div>
           </div>
+          <div class="field">
+            <span class="field__label">Register with</span>
+            <select id="f-registrar" class="dom-select">
+              <option value="cloudflare">Cloudflare</option>
+              <option value="porkbun">Porkbun</option>
+              <option value="namecheap">Namecheap</option>
+              <option value="dynadot">Dynadot</option>
+              <option value="spaceship">Spaceship</option>
+              <option value="godaddy">GoDaddy</option>
+            </select>
+          </div>
           <button class="btn" id="find-btn" type="button">Find domains</button>
           <p class="hint">Each name is checked live: a DNS lookup rules out registered names, then an RDAP query confirms the rest are unregistered right now. Only names RDAP confirms as open are shown, so the list is real, not stale expired-domain data. Availability can still change before checkout.</p>
         </div>
@@ -101,6 +112,7 @@ const description =
 
       <section class="pane out-pane">
         <div class="diff-bar" id="status-bar">
+          <span class="dom-spin" id="busy" hidden></span>
           <span class="diff-stat" id="status-msg">Type a keyword and hit Find domains.</span>
           <button class="btn btn--sm" id="more-btn" type="button" style="margin-left:auto" hidden>Find more</button>
         </div>

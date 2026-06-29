@@ -26,8 +26,19 @@ function initTheme() {
   });
 }
 
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* ---------- registrars ---------- */
+const REGISTRARS = {
+  cloudflare: (d) => `https://domains.cloudflare.com/?domain=${d}`,
+  porkbun: (d) => `https://porkbun.com/checkout/search?q=${d}`,
+  namecheap: (d) => `https://www.namecheap.com/domains/registration/results/?domain=${d}`,
+  dynadot: (d) => `https://www.dynadot.com/domain/search?domain=${d}`,
+  spaceship: (d) => `https://www.spaceship.com/domain-search/?query=${d}`,
+  godaddy: (d) => `https://www.godaddy.com/domainsearch/find?domainToCheck=${d}`,
+};
+const registerLink = (d) => (REGISTRARS[state.registrar] || REGISTRARS.cloudflare)(encodeURIComponent(d));
 
 /* ---------- modes ---------- */
 const MODE_NOTE = {
@@ -48,7 +59,6 @@ function coinWord() {
   for (const c of pick(PATTERNS)) s += c === 'C' ? pick(CONS) : pick(VOW);
   return s;
 }
-
 const PREFIX = ['get', 'try', 'use', 'go', 'my', 'the'];
 const SUFFIX = ['hq', 'app', 'ly', 'kit', 'hub', 'base', 'labs', 'flow', 'io', 'ify', 'now'];
 
@@ -56,8 +66,7 @@ function variationBases(seed, seen, count) {
   const out = [];
   let guard = 0;
   while (out.length < count && guard++ < count * 25) {
-    const useP = Math.random() < 0.5;
-    const name = useP ? pick(PREFIX) + seed : seed + pick(SUFFIX);
+    const name = Math.random() < 0.5 ? pick(PREFIX) + seed : seed + pick(SUFFIX);
     if (name.length < 3 || name.length > 18 || seen.has(name)) continue;
     seen.add(name);
     out.push(name);
@@ -76,10 +85,10 @@ function brandBases(seen, count) {
   return out;
 }
 
-/* ---------- availability checks (with timeouts) ---------- */
+/* ---------- availability checks (timeouts + retries) ---------- */
 async function fetchT(url, opts, ms) {
   const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), ms || 8000);
+  const t = setTimeout(() => ac.abort(), ms || 7000);
   try { return await fetch(url, { ...opts, signal: ac.signal }); }
   finally { clearTimeout(t); }
 }
@@ -89,7 +98,7 @@ async function nsTaken(domain) {
   try {
     const r = await fetchT(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`, {
       headers: { accept: 'application/dns-json' },
-    });
+    }, 6000);
     if (!r.ok) return null;
     const j = await r.json();
     if (j.Status === 3) return false; // NXDOMAIN
@@ -98,52 +107,79 @@ async function nsTaken(domain) {
   } catch (e) { return null; }
 }
 // true = available (404), false = registered (200), null = unknown
-async function rdapAvailable(domain) {
+async function rdapOnce(domain) {
   try {
-    const r = await fetchT('https://rdap.org/domain/' + encodeURIComponent(domain));
+    const r = await fetchT('https://rdap.org/domain/' + encodeURIComponent(domain), undefined, 7000);
     if (r.status === 404) return true;
     if (r.status === 200) return false;
     return null;
   } catch (e) { return null; }
 }
+// rdap.org redirects to per-registry servers that can be slow under load,
+// so retry a few times with backoff before giving up.
+async function rdapAvailable(domain) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await sleep(400 * attempt);
+    const v = await rdapOnce(domain);
+    if (v !== null) return v;
+  }
+  return null;
+}
 
-// 'available' | 'taken' | 'unknown' (RDAP is the authority; retry once if hazy)
+// 'available' | 'taken' | 'unknown'
 async function checkDomain(domain) {
   const taken = await nsTaken(domain);
   if (taken === true) return 'taken';
-  let avail = await rdapAvailable(domain);
-  if (avail === null) { await sleep(350); avail = await rdapAvailable(domain); }
+  const avail = await rdapAvailable(domain);
   if (avail === true) return 'available';
   if (avail === false) return 'taken';
   return 'unknown';
 }
 
-/* ---------- state + render ---------- */
-const state = { mode: 'exact', seen: new Set(), checked: 0, found: 0, running: false };
+/* ---------- state ---------- */
+const state = { mode: 'exact', registrar: 'cloudflare', seen: new Set(), checked: 0, found: 0, running: false };
 
 const selectedTlds = () => {
   const t = $$('#tlds input:checked').map((i) => i.value);
   return t.length ? t : ['.com'];
 };
-const registerLink = (d) => `https://www.namecheap.com/domains/registration/results/?domain=${encodeURIComponent(d)}`;
 const setStatus = (msg) => { $('#status-msg').textContent = msg; };
+const setBusy = (on) => { $('#busy').hidden = !on; };
+
+/* ---------- rows ---------- */
+const SPIN = '<span class="dom-spin" aria-hidden="true"></span>';
+
+function rowMarkup(domain, status) {
+  if (status === 'pending') {
+    return `<span class="dom-name">${esc(domain)}</span><span class="dom-tag dom-tag--pending">${SPIN} checking</span>`;
+  }
+  if (status === 'available') {
+    return `<span class="dom-name">${esc(domain)}</span>
+      <span class="dom-tag">available</span>
+      <a class="btn btn--sm dom-reg" data-domain="${esc(domain)}" href="${registerLink(domain)}" target="_blank">Register</a>`;
+  }
+  const tag = status === 'taken'
+    ? '<span class="dom-tag dom-tag--taken">taken</span>'
+    : '<span class="dom-tag dom-tag--unknown">could not check</span>';
+  return `<span class="dom-name">${esc(domain)}</span>${tag}`;
+}
 
 function addRow(domain, status) {
   const list = $('#dom-list');
   const el = document.createElement('div');
-  if (status === 'available') {
-    el.className = 'dom-row';
-    el.innerHTML = `<span class="dom-name">${esc(domain)}</span>
-      <span class="dom-tag">available</span>
-      <a class="btn btn--sm dom-reg" href="${registerLink(domain)}" target="_blank">Register</a>`;
-  } else {
-    el.className = 'dom-row dom-row--muted';
-    const tag = status === 'taken'
-      ? '<span class="dom-tag dom-tag--taken">taken</span>'
-      : '<span class="dom-tag dom-tag--unknown">could not check</span>';
-    el.innerHTML = `<span class="dom-name">${esc(domain)}</span>${tag}`;
-  }
+  el.className = 'dom-row' + (status === 'available' ? '' : status === 'pending' ? ' dom-row--pending' : ' dom-row--muted');
+  el.dataset.domain = domain;
+  el.innerHTML = rowMarkup(domain, status);
   list.appendChild(el);
+  return el;
+}
+function updateRow(el, domain, status) {
+  el.className = 'dom-row' + (status === 'available' ? '' : ' dom-row--muted');
+  el.innerHTML = rowMarkup(domain, status);
+}
+
+function updateRegLinks() {
+  $$('.dom-reg[data-domain]').forEach((a) => { a.href = registerLink(a.dataset.domain); });
 }
 
 /* ---------- run a batch ---------- */
@@ -152,6 +188,7 @@ async function runBatch() {
   state.running = true;
   $('#find-btn').disabled = true;
   $('#more-btn').disabled = true;
+  setBusy(true);
 
   try {
     const seed = sanitize($('#f-seed').value);
@@ -169,26 +206,27 @@ async function runBatch() {
     const domains = [];
     for (const bse of bases) for (const t of tlds) domains.push(bse + t);
 
-    setStatus(`Checking ${domains.length} name${domains.length === 1 ? '' : 's'}…`);
+    setStatus(`Checking ${domains.length} name${domains.length === 1 ? '' : 's'}`);
+
+    // Exact mode shows a row per ending up front, each resolving in place.
+    const pending = {};
+    if (mode === 'exact') for (const d of domains) pending[d] = addRow(d, 'pending');
 
     let i = 0, foundThis = 0;
-    const POOL = 6;
+    const POOL = 4;
     const worker = async () => {
       while (i < domains.length) {
         const d = domains[i++];
         const verdict = await checkDomain(d);
         state.checked++;
         if (mode === 'exact') {
-          addRow(d, verdict);
+          updateRow(pending[d], d, verdict);
           if (verdict === 'available') foundThis++;
-          setStatus(`Checked ${state.checked} of ${domains.length}…`);
         } else if (verdict === 'available') {
           state.found++; foundThis++;
           addRow(d, 'available');
-          setStatus(`Checked ${state.checked} · found ${state.found} open`);
-        } else {
-          setStatus(`Checked ${state.checked} · found ${state.found} open`);
         }
+        if (mode !== 'exact') setStatus(`Checked ${state.checked} · found ${state.found} open`);
       }
     };
     await Promise.all(Array.from({ length: POOL }, worker));
@@ -198,10 +236,11 @@ async function runBatch() {
     } else if (state.found) {
       setStatus(`Found ${state.found} open name${state.found === 1 ? '' : 's'} from ${state.checked} checked`);
     } else {
-      setStatus(`Nothing open in that batch, try Find more`);
+      setStatus('Nothing open in that batch, try Find more');
     }
   } finally {
     state.running = false;
+    setBusy(false);
     updateControls();
   }
 }
@@ -225,6 +264,17 @@ function updateControls() {
 
 function initDomain() {
   initTheme();
+
+  try {
+    const r = localStorage.getItem('lildomain-registrar');
+    if (r && REGISTRARS[r]) state.registrar = r;
+  } catch (e) {}
+  $('#f-registrar').value = state.registrar;
+  $('#f-registrar').addEventListener('change', (e) => {
+    state.registrar = e.target.value;
+    try { localStorage.setItem('lildomain-registrar', state.registrar); } catch (err) {}
+    updateRegLinks();
+  });
 
   $$('[data-mode]').forEach((b) => b.addEventListener('click', () => {
     state.mode = b.dataset.mode;

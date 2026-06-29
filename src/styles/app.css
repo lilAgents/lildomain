@@ -938,3 +938,50 @@ html[data-theme="dark"] .seg__btn.is-active {
 [hidden] {
   display: none !important;
 }
+
+/* ---------- registrar select + spinner + pending rows ---------- */
+.dom-select {
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 11px;
+  cursor: pointer;
+}
+.dom-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.dom-spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  display: inline-block;
+  vertical-align: middle;
+  animation: dom-spin 0.7s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes dom-spin {
+  to { transform: rotate(360deg); }
+}
+.dom-row--pending {
+  background: var(--field);
+}
+.dom-tag--pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+.dom-tag--pending .dom-spin {
+  width: 11px;
+  height: 11px;
+}
