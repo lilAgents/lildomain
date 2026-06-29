@@ -93,18 +93,22 @@ async function fetchT(url, opts, ms) {
   finally { clearTimeout(t); }
 }
 
-// true = registered, false = no NS (likely free), null = unknown
-async function nsTaken(domain) {
-  try {
-    const r = await fetchT(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`, {
-      headers: { accept: 'application/dns-json' },
-    }, 6000);
-    if (!r.ok) return null;
-    const j = await r.json();
-    if (j.Status === 3) return false; // NXDOMAIN
-    if (j.Status !== 0) return null;
-    return (j.Answer || []).some((a) => a.type === 2);
-  } catch (e) { return null; }
+// 'taken' (has NS) | 'free' (NXDOMAIN, no such domain) | 'unknown'.
+// DoH is fast and reliable, so retry it a couple times before giving up.
+async function nsStatus(domain) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await sleep(250 * attempt);
+    try {
+      const r = await fetchT(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`, {
+        headers: { accept: 'application/dns-json' },
+      }, 6000);
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (j.Status === 3) return 'free'; // NXDOMAIN: the name does not exist
+      if (j.Status === 0) return (j.Answer || []).some((a) => a.type === 2) ? 'taken' : 'unknown';
+    } catch (e) { /* retry */ }
+  }
+  return 'unknown';
 }
 // true = available (404), false = registered (200), null = unknown
 async function rdapOnce(domain) {
@@ -126,13 +130,17 @@ async function rdapAvailable(domain) {
   return null;
 }
 
-// 'available' | 'taken' | 'unknown'
+// 'available' | 'taken' | 'unknown'. RDAP is the authority when it answers,
+// but it rate-limits and some registries' servers block cross-origin calls,
+// so a clear NXDOMAIN from DNS is the fallback rather than giving up.
 async function checkDomain(domain) {
-  const taken = await nsTaken(domain);
-  if (taken === true) return 'taken';
+  const ns = await nsStatus(domain);
+  if (ns === 'taken') return 'taken';
   const avail = await rdapAvailable(domain);
   if (avail === true) return 'available';
   if (avail === false) return 'taken';
+  // RDAP could not confirm: trust a definite "no such domain" from DNS
+  if (ns === 'free') return 'available';
   return 'unknown';
 }
 
