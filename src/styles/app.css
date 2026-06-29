@@ -908,3 +908,33 @@ html[data-theme="dark"] .seg__btn.is-active {
   text-decoration: none;
   flex: 0 0 auto;
 }
+
+/* ---------- lilDomain mode note + status rows ---------- */
+.mode-note {
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.dom-row--muted {
+  background: var(--field);
+}
+.dom-row--muted .dom-name {
+  color: var(--muted);
+  font-weight: 500;
+}
+.dom-tag--taken {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+.dom-tag--unknown {
+  background: transparent;
+  color: var(--warn, #c9710e);
+  border: 1px solid color-mix(in srgb, var(--warn, #c9710e) 35%, transparent);
+}
+
+/* the hidden attribute must win over .btn's display rule */
+[hidden] {
+  display: none !important;
+}

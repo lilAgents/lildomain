@@ -71,15 +71,17 @@ const description =
       <section class="pane form-pane">
         <div class="fields">
           <div class="field">
-            <span class="field__label">Keyword (optional)</span>
-            <input id="f-seed" type="text" autocomplete="off" maxlength="20" placeholder="e.g. coffee, ledger, otter" />
+            <span class="field__label">Keyword</span>
+            <input id="f-seed" type="text" autocomplete="off" maxlength="20" placeholder="e.g. otter, ledger, coffee" />
           </div>
           <div class="field">
-            <span class="field__label">Style</span>
-            <div class="seg seg--full" role="group" aria-label="Style">
-              <button class="seg__btn is-active" data-style="mix" type="button">Keyword mixes</button>
-              <button class="seg__btn" data-style="coin" type="button">Coined words</button>
+            <span class="field__label">Search style</span>
+            <div class="seg seg--full" role="group" aria-label="Search style">
+              <button class="seg__btn is-active" data-mode="exact" type="button">Exact</button>
+              <button class="seg__btn" data-mode="variations" type="button">Variations</button>
+              <button class="seg__btn" data-mode="brandable" type="button">Brandable</button>
             </div>
+            <p class="mode-note" id="mode-note"></p>
           </div>
           <div class="field">
             <span class="field__label">Endings</span>
@@ -93,17 +95,17 @@ const description =
             </div>
           </div>
           <button class="btn" id="find-btn" type="button">Find domains</button>
-          <p class="hint">Each candidate is checked live: a DNS lookup rules out anything registered, then an RDAP query confirms the rest are genuinely unregistered right now. So this surfaces what you can actually buy today, not stale expired-domain lists. Availability can still change between here and checkout.</p>
+          <p class="hint">Each name is checked live: a DNS lookup rules out registered names, then an RDAP query confirms the rest are unregistered right now. Only names RDAP confirms as open are shown, so the list is real, not stale expired-domain data. Availability can still change before checkout.</p>
         </div>
       </section>
 
       <section class="pane out-pane">
         <div class="diff-bar" id="status-bar">
-          <span class="diff-stat" id="status-msg">Pick your options and hit Find domains.</span>
-          <button class="btn btn--sm" id="more-btn" type="button" style="margin-left:auto" disabled>Find more</button>
+          <span class="diff-stat" id="status-msg">Type a keyword and hit Find domains.</span>
+          <button class="btn btn--sm" id="more-btn" type="button" style="margin-left:auto" hidden>Find more</button>
         </div>
         <div class="dom-wrap" id="results">
-          <div class="case-intro"><p class="case-intro-big">Open names show up here</p><p class="case-intro-sub">Add a keyword or switch to coined words, choose your endings, and lilDomain hunts for names that are free to register right now.</p></div>
+          <div class="case-intro"><p class="case-intro-big">Open names show up here</p><p class="case-intro-sub">Type a word to check it across your endings, or switch to Variations or Brandable to discover new names that are free to register right now.</p></div>
         </div>
       </section>
     </main>
