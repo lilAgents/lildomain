@@ -21,7 +21,7 @@ function initTheme() {
   btn.addEventListener('click', () => {
     const next = current() === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
-    try { localStorage.setItem('lildomain-theme', next); } catch (e) {}
+    try { localStorage.setItem('lildomain-theme', next); } catch (e) { /* storage may be unavailable; safe to ignore */ }
     setThemeIcon(btn, next);
   });
 }
@@ -276,11 +276,11 @@ function initDomain() {
   try {
     const r = localStorage.getItem('lildomain-registrar');
     if (r && REGISTRARS[r]) state.registrar = r;
-  } catch (e) {}
+  } catch (e) { /* storage may be unavailable; safe to ignore */ }
   $('#f-registrar').value = state.registrar;
   $('#f-registrar').addEventListener('change', (e) => {
     state.registrar = e.target.value;
-    try { localStorage.setItem('lildomain-registrar', state.registrar); } catch (err) {}
+    try { localStorage.setItem('lildomain-registrar', state.registrar); } catch (err) { /* storage may be unavailable; safe to ignore */ }
     updateRegLinks();
   });
 
