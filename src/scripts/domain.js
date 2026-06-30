@@ -113,10 +113,12 @@ async function nsStatus(domain) {
 // true = available (404), false = registered (200), null = unknown
 async function rdapOnce(domain) {
   try {
-    const r = await fetchT('https://rdap.org/domain/' + encodeURIComponent(domain), undefined, 7000);
-    if (r.status === 404) return true;
-    if (r.status === 200) return false;
-    return null;
+    // RDAP runs server-side (rdap.org redirects to per-registry hosts the browser
+    // can't reach cross-origin), so newer TLDs like .xyz resolve fast.
+    const r = await fetchT('/.netlify/functions/domain-rdap?domain=' + encodeURIComponent(domain), undefined, 9000);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return typeof j.available === 'boolean' ? j.available : null;
   } catch (e) { return null; }
 }
 // rdap.org redirects to per-registry servers that can be slow under load,
